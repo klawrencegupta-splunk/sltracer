@@ -1,0 +1,172 @@
+<form version="1.1">
+  <label>[search-launcher] Analysis</label>
+  <fieldset submitButton="false" autoRun="true">
+    <input type="time" token="timer">
+      <label>Time Range</label>
+      <default>
+        <earliest>-60m@m</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>[search-launcher]  - dc(search_id) by pid</title>
+      <chart>
+        <title>sltrace.log from script</title>
+        <search>
+          <query>index=main sourcetype=sltracer "watchdog.log" | rex field=_raw "(?&lt;search_id&gt;16\d+.\d{3})" 
+| rex field=source "(?&lt;pid&gt;\d+).txt" 
+| fields _time pid search_id | timechart dc(search_id) by pid useother=f usenull=f</query>
+          <earliest>$timer.earliest$</earliest>
+          <latest>$timer.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.abbreviation">none</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.abbreviation">none</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.abbreviation">none</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.mode">standard</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="charting.lineWidth">2</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>[search-launcher]  - dc(search_id) by app</title>
+      <chart>
+        <title>from _audit index joined by search_id</title>
+        <search>
+          <query>index=_audit | eval search_id=trim(search_id,"'") | join search_id [search index=main sourcetype=sltracer "watchdog.log" | rex field=_raw "(?&lt;search_id&gt;16\d+.\d+)" 
+| rex field=source "(?&lt;pid&gt;\d+).txt" | fields _time pid search_id ] | chart dc(search_id) over app by pid useother=f</query>
+          <earliest>$timer.earliest$</earliest>
+          <latest>$timer.latest$</latest>
+        </search>
+        <option name="charting.chart">bar</option>
+        <option name="charting.drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Search.log Counter</title>
+      <single>
+        <title>count of search_id</title>
+        <search>
+          <query>index=main sourcetype=search_log "UnifiedSearch" AND "- base lispy"  | rex field=_raw "base\slispy:\s+(?&lt;lispy_search&gt;.+)" | rename sid AS search_id | join search_id [search index=main sourcetype=sltracer "search.log" | rex field=_raw "dispatch/(?&lt;search_id&gt;.{1,25})/" | rex field=source "(?&lt;pid&gt;\d+).txt" | fields _time pid search_id] | stats dc(search_id) AS "Search.log Counter"</query>
+          <earliest>$timer.earliest$</earliest>
+          <latest>$timer.latest$</latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Audit Counter</title>
+      <single>
+        <title>count of search_id</title>
+        <search>
+          <query>index=_audit action=search | eval search_id=trim(search_id,"'") | join search_id [search index=main sourcetype=sltracer "search.log" 
+| rex field=_raw "dispatch/(?&lt;search_id&gt;.{1,25})/" 
+| rex field=source "(?&lt;pid&gt;\d+).txt" 
+| fields _time pid search_id ] | stats dc(search_id) AS "Audit Counter"</query>
+          <earliest>$timer.earliest$</earliest>
+          <latest>$timer.latest$</latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Introspection Counter</title>
+      <single>
+        <title>count of PIDs</title>
+        <search>
+          <query>index=main sourcetype=sltracer "search.log" | rex field=_raw "(?&lt;search_id&gt;16\d+.\d{3})" 
+| rex field=source "(?&lt;pid&gt;\d+).txt" 
+| fields _time pid search_id | join pid [search index=_introspection | rename data.pid AS pid ] | stats dc(pid) AS "Total [search-launcher] PIDs"</query>
+          <earliest>$timer.earliest$</earliest>
+          <latest>$timer.latest$</latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>search.log *NOT required but has helped with validation*</title>
+      <table>
+        <title>[search-launcher] - search.log join on search_id</title>
+        <search>
+          <query>index=main sourcetype=search_log "UnifiedSearch" AND "- base lispy"  | rex field=_raw "base\slispy:\s+(?&lt;lispy_search&gt;.+)" | rename sid AS search_id | join search_id [search index=main sourcetype=sltracer "search.log" | rex field=_raw "dispatch/(?&lt;search_id&gt;.{1,25})/" | rex field=source "(?&lt;pid&gt;\d+).txt" | fields _time pid search_id] | stats values(lispy_search) by pid search_id | sort -pid</query>
+          <earliest>$timer.earliest$</earliest>
+          <latest>$timer.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="dataOverlayMode">heatmap</option>
+        <option name="drilldown">none</option>
+        <option name="rowNumbers">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>_audit</title>
+      <table>
+        <title>[search-launcher] - _audit join on search_id</title>
+        <search>
+          <query>index=_audit action=search | eval search_id=trim(search_id,"'") | join search_id [search index=main sourcetype=sltracer "search.log" 
+| rex field=_raw "dispatch/(?&lt;search_id&gt;.{1,25})/" 
+| rex field=source "(?&lt;pid&gt;\d+).txt" 
+| fields _time pid search_id ] | stats values(search) by pid search_id | sort -pid</query>
+          <earliest>$timer.earliest$</earliest>
+          <latest>$timer.latest$</latest>
+        </search>
+        <option name="dataOverlayMode">heatmap</option>
+        <option name="drilldown">none</option>
+        <option name="rowNumbers">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>_introspection</title>
+      <table>
+        <title>[search-launcher] - _introspection join on pid</title>
+        <search>
+          <query>index=main sourcetype=sltracer "search.log" | rex field=_raw "(?&lt;search_id&gt;16\d+.\d{3})" 
+| rex field=source "(?&lt;pid&gt;\d+).txt" 
+| fields _time pid search_id | join pid [search index=_introspection | rename data.pid AS pid ] | stats max(data.normalized_pct_cpu) AS CPU max(data.elapsed) AS ms by pid | where isnotnull(CPU) | sort +pid</query>
+          <earliest>$timer.earliest$</earliest>
+          <latest>$timer.latest$</latest>
+        </search>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">true</option>
+      </table>
+    </panel>
+  </row>
+</form>
